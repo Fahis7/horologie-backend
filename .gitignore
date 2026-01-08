@@ -1,0 +1,54 @@
+# --- Django Core ---
+*.log
+*.pot
+*.pyc
+__pycache__/
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# --- Environment Variables (CRITICAL) ---
+.env
+.env.*
+! .env.example
+
+venv
+
+# --- Media & Static ---
+# Ignore user-uploaded media (you usually want to keep these local-only or on Cloudinary)
+media/
+staticfiles/
+
+# --- Virtual Environments ---
+# Common names for virtual env folders
+venv/
+env/
+.venv/
+.env/
+
+# --- Python ---
+*.egg-info/
+.eggs/
+dist/
+build/
+.coverage
+htmlcov/
+.pytest_cache/
+
+# --- IDE & Editors ---
+# VS Code
+.vscode/
+# PyCharm / IntelliJ
+.idea/
+# Mac OS
+.DS_Store
+
+# --- Email / Celery ---
+celerybeat-schedule
+celerybeat.pid
+
+# --- Frontend (if inside the same repo) ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
