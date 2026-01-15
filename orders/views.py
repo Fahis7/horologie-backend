@@ -1,18 +1,22 @@
 import stripe
 from django.conf import settings
 from django.core.mail import send_mail
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import  permissions, generics
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import permissions, generics, status
+from rest_framework.permissions import IsAdminUser
+
 from .models import Order, OrderItem
 from .serializers import OrderSerializer
 from cart.models import Cart
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
-# 1. Initialize Stripe Payment
+# ==========================================
+# 1. CUSTOMER: Initialize Stripe Payment
+# ==========================================
 class CreatePaymentIntentView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -36,7 +40,9 @@ class CreatePaymentIntentView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=500)
 
-# 2. Save the Order
+# ==========================================
+# 2. CUSTOMER: Create Order (Checkout)
+# ==========================================
 class CreateOrderView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -44,6 +50,7 @@ class CreateOrderView(APIView):
         user = request.user
         data = request.data
         
+        # Safe get cart
         cart = get_object_or_404(Cart, user=user)
         cart_items = cart.items.all()
         
@@ -81,7 +88,7 @@ class CreateOrderView(APIView):
                 # Clear Cart
                 cart_items.delete()
 
-                # ✅ SEND EMAIL
+                # Send Email
                 self.send_confirmation_email(user, order)
 
             serializer = OrderSerializer(order)
@@ -91,41 +98,27 @@ class CreateOrderView(APIView):
             print(f"Order Creation Error: {e}")
             return Response({"detail": str(e)}, status=500)
 
-    # EMAIL CONTENT
     def send_confirmation_email(self, user, order):
         try:
             dashboard_link = "http://localhost:5173/orders"
-
             subject = f"CONFIRMED: Your Acquisition | Order #{order.id}"
             
             message = f"""
-Dear {user.first_name},
+Dear {user.name},
 
 It is with distinct pleasure that we confirm your recent acquisition from the Horologie Maison.
 
-You have not merely purchased a timepiece; you have secured a legacy. 
-Our master horologists in the atelier are currently performing the final precision checks on your selection to ensure it meets our exacting standards of excellence before it begins its journey to you.
-
 Your investment details are securely recorded below:
-
 ------------------------------------------------------
 ACQUISITION REFERENCE: #{order.id}
 TOTAL INVESTMENT: ₹{order.total_price}
 ------------------------------------------------------
 
-OFFICIAL DOCUMENTATION
-In recognition of this acquisition, an official Digital Certificate of Authenticity has been minted in your name. 
-This document serves as immutable proof of ownership for your private records.
-
-"Your digital Certificate of Authenticity has been minted. You may access and securely download it from your private vault:"
+"Your digital Certificate of Authenticity has been minted. You may access it from your private vault:"
 {dashboard_link}
 
-We remain at your service.
-
 Yours in Excellence,
-
 The Horologie Private Concierge
-New York | Geneva | Tokyo
             """
 
             send_mail(
@@ -140,10 +133,70 @@ New York | Geneva | Tokyo
         except Exception as e:
             print(f"❌ Email failed: {str(e)}")
 
-# 3. List User Orders
+# ==========================================
+# 3. CUSTOMER: List My Orders
+# ==========================================
 class OrderListView(generics.ListAPIView):
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         return Order.objects.filter(user=self.request.user).order_by('-created_at')
+
+# ==========================================
+# 4. ADMIN: List ALL Orders (Dashboard)
+# ==========================================
+class AdminOrderListView(generics.ListAPIView):
+    serializer_class = OrderSerializer
+    permission_classes = [IsAdminUser] 
+
+    def get_queryset(self):
+        return Order.objects.all().order_by('-created_at')
+
+# ==========================================
+# 5. ADMIN: Update Order Status (With Locking)
+# ==========================================
+class AdminOrderUpdateView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def patch(self, request, pk):
+        order = get_object_or_404(Order, pk=pk)
+        new_status = request.data.get('status')
+        
+        if not new_status:
+            return Response({"error": "Status is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ✅ LOGIC: Prevent changing status if final
+        if order.status == 'delivered':
+            return Response({"error": "Cannot change status of a delivered order."}, status=400)
+        
+        if order.status == 'cancelled':
+             return Response({"error": "Cannot change status of a cancelled order."}, status=400)
+
+        order.status = new_status
+        order.save()
+        return Response(OrderSerializer(order).data)
+
+# ==========================================
+# 6. CUSTOMER: Cancel Order (New)
+# ==========================================
+class CancelOrderView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        # Ensure users can only cancel THEIR OWN orders
+        order = get_object_or_404(Order, pk=pk, user=request.user)
+
+        # ✅ Check eligibility
+        if order.status in ['shipped', 'delivered', 'cancelled']:
+            return Response(
+                {"error": f"Cannot cancel order that is already {order.status}"}, 
+                status=400
+            )
+
+        order.status = 'cancelled'
+        order.save()
+        
+        # Optional: Add refund logic here if payment was made
+        
+        return Response(OrderSerializer(order).data)

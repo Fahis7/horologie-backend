@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'products',
     'cart',
     'wishlist',
+    'drf_yasg',
     'orders',
     "cloudinary",
     "cloudinary_storage",
@@ -180,6 +181,13 @@ REST_FRAMEWORK = {
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+}
+
+# CACHE SETTINGS
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    }
 }
 
 # Email Settings
