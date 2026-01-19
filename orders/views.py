@@ -88,7 +88,7 @@ class CreateOrderView(APIView):
                 # Clear Cart
                 cart_items.delete()
 
-                # Send Email
+                # Send Email (To User AND Admin)
                 self.send_confirmation_email(user, order)
 
             serializer = OrderSerializer(order)
@@ -100,23 +100,23 @@ class CreateOrderView(APIView):
 
     def send_confirmation_email(self, user, order):
         try:
-            # FIX: Use your real Live URL, not localhost
+            # --- 1. PREPARE DATA ---
+            # Use Live URL
             dashboard_link = "https://horologiee.vercel.app/orders"
-            
-            subject = f"CONFIRMED: Your Acquisition | Order #{order.id}"
-            
-            # FIX: Use first_name (or username), because user.name does not exist
+            # Fix: Use first_name or username (user.name does not exist)
             user_name = user.first_name if user.first_name else user.username
-            
-            message = f"""
+
+            # --- 2. EMAIL TO CUSTOMER ---
+            subject_user = f"CONFIRMED: Your Acquisition | Order #{order.id}"
+            message_user = f"""
 Dear {user_name},
 
 It is with distinct pleasure that we confirm your recent acquisition from the Horologie Maison.
 
-Your investment details are securely recorded below:
+Your investment details:
 ------------------------------------------------------
-ACQUISITION REFERENCE: #{order.id}
-TOTAL INVESTMENT: ₹{order.total_price}
+ORDER ID: #{order.id}
+AMOUNT PAID: ₹{order.total_price}
 ------------------------------------------------------
 
 "Your digital Certificate of Authenticity has been minted. You may access it from your private vault:"
@@ -127,13 +127,36 @@ The Horologie Private Concierge
             """
 
             send_mail(
-                subject,
-                message,
+                subject_user,
+                message_user,
                 settings.DEFAULT_FROM_EMAIL,
-                [user.email],
+                [user.email], # Sends to Customer
                 fail_silently=True, 
             )
-            print(f"✅ Email sent to {user.email}")
+            print(f"✅ Customer email sent to {user.email}")
+
+            # --- 3. EMAIL TO ADMIN (YOU) ---
+            subject_admin = f"💰 NEW SALE! Order #{order.id} - ₹{order.total_price}"
+            message_admin = f"""
+🚀 YOU MADE A NEW SALE!
+
+User: {user.email} ({user_name})
+Amount: ₹{order.total_price}
+Order ID: #{order.id}
+Status: {order.status}
+
+Check the admin panel:
+https://horologiee.vercel.app/manageorders
+            """
+
+            send_mail(
+                subject_admin,
+                message_admin,
+                settings.DEFAULT_FROM_EMAIL,
+                ['fahismt777@gmail.com'], # <--- YOUR EMAIL ADDRESS
+                fail_silently=True, 
+            )
+            print("✅ Admin notification sent!")
             
         except Exception as e:
             print(f"❌ Email failed: {str(e)}")
