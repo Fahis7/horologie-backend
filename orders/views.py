@@ -100,11 +100,16 @@ class CreateOrderView(APIView):
 
     def send_confirmation_email(self, user, order):
         try:
-            dashboard_link = "http://localhost:5173/orders"
+            # FIX: Use your real Live URL, not localhost
+            dashboard_link = "https://horologiee.vercel.app/orders"
+            
             subject = f"CONFIRMED: Your Acquisition | Order #{order.id}"
             
+            # FIX: Use first_name (or username), because user.name does not exist
+            user_name = user.first_name if user.first_name else user.username
+            
             message = f"""
-Dear {user.name},
+Dear {user_name},
 
 It is with distinct pleasure that we confirm your recent acquisition from the Horologie Maison.
 
